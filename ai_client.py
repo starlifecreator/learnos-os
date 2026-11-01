@@ -62,6 +62,12 @@ def _ensure_cache_table() -> None:
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS ai_result_cache ("
                 " cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at TEXT NOT NULL)")
+            # review：TTL 清理（DELETE WHERE created_at < ?）与 LRU 裁剪
+            # （ORDER BY created_at ASC LIMIT ?）都按 created_at 过滤/排序；
+            # 无索引时每次写缓存都全表扫描，2000 行上限下加索引避免退化。
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ai_result_cache_created_at "
+                "ON ai_result_cache(created_at)")
     except Exception as exc:
         LOG.warning("创建结果缓存表失败: %s", exc)
 

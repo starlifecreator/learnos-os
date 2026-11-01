@@ -110,6 +110,10 @@ def schedule_review(
         step = None
     elif late >= OVERDUE_HALVE_DAYS:
         interval = max(1, interval // 2)
+    # review：engine_reason 此前写入 ScheduleResult 但无消费方；
+    # 至少在 LOG 里落一条 INFO，让「静默降级」可被 grep/日志告警发现。
+    LOG.info("调度使用 SM-2 引擎 reason=%s subject=%s state=%s",
+             reason or "(default)", subject, st)
     return ScheduleResult(
         engine="sm2", interval_days=interval,
         next_due=(today + timedelta(days=interval)).isoformat(),
