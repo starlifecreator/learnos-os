@@ -373,7 +373,8 @@ def review_card(card_id: int, rating: int) -> dict[str, Any]:
             "state = ?, stability = ?, difficulty = ?, last_review = ?, fsrs_step = ? WHERE id = ?",
             (next_due, result.interval_days, result.ease_factor, result.repetition,
              fs_state, fs_stability, fs_difficulty, date.today().isoformat(),
-             result.step if int(fs_state) in (1, 2) else None,
+             # vendor 枚举：Learning=1, Relearning=3 持久化 step；Review=2 写回 None。
+             result.step if int(fs_state) in (1, 3) else None,
              card_id))
     # Phase 2：卡片评分实时回写图谱掌握度（双驱动）
     try:

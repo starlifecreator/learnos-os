@@ -182,18 +182,19 @@ def _state_to_card(
     """从持久化状态重建 Card；无历史时按已学间隔估算。
 
     L3：回填 Learning/Relearning 子步 step，避免重启后子步丢失。
-    升级兼容：旧数据（v38 前 fsrs_step 为 NULL）下 state=1/2 的卡片，
-    step 必须兜底为 0，否则 vendor FSRS 在 Learning/Relearning 态硬断言
+    升级兼容：旧数据（v38 前 fsrs_step 为 NULL）下 Learning(1)/Relearning(3) 态
+    的卡片，step 必须兜底为 0，否则 vendor FSRS 在这两个态硬断言
     `card.step is not None` 会抛 AssertionError，被上层静默降级为 SM-2。
+    vendor 枚举：Learning=1, Review=2, Relearning=3（reviewer 纠正：此前误把
+    Review=2 当 Relearning，写成了 (1,2)，导致 Relearning=3 仍崩）。
     """
     card = Card()
     if state > 0:
         card.state = state
         card.stability = stability or max(prev_interval * 0.6, 1.0)
         card.difficulty = difficulty
-        # vendor FSRS 对 Learning(1)/Relearning(2) 强制要求 step 非 None；
-        # Review(3) 态 step 无意义。旧数据升级后 NULL 一律兜底 0。
-        if state in (1, 2):
+        # 只有 Learning(1)/Relearning(3) 要求 step 非 None；Review(2) 无意义。
+        if state in (1, 3):
             card.step = 0 if step is None else step
         else:
             card.step = step

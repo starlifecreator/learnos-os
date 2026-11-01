@@ -159,28 +159,36 @@ class TestCards(unittest.TestCase):
         self.assertEqual(logs[0]["rating"], 4)
 
     def test_fsrs_step_none_learning_state_no_silent_sm2(self):
-        """review L3 Critical：旧数据升级后 fsrs_step=NULL、state=1(Learning) 的卡片，
-        复习时必须走 FSRS 引擎，不能因 vendor `assert card.step is not None` 抛异常
-        而静默降级为 SM-2。_state_to_card 兜底 step=None→0 后，engine 必须是 'fsrs'。
+        """review L3 Critical：旧数据升级后 fsrs_step=NULL 的卡片，复习时必须走 FSRS。
+        vendor 枚举（vendor/fsrs/fsrs/state.py）：Learning=1, Review=2, Relearning=3。
+        Learning(1)/Relearning(3) 态 step=None 必须兜底 0，否则 vendor
+        `assert card.step is not None` 抛异常被静默降级 SM-2。
+        Review(2) 态 step=None 是正常的（无 step 概念）。
         """
         from scheduler import schedule_review
         if not fsrs_bridge.fsrs_available():
             self.skipTest("FSRS vendor 不可用")
-        # state=1 Learning、step=None（模拟 v38 前旧数据 NULL）
-        res = schedule_review(
-            4, prev_interval=1, prev_ease=2.5, prev_repetition=0,
-            state=1, stability=0.0, difficulty=0.0,
+        for state, label in ((1, "Learning"), (3, "Relearning")):
+            res = schedule_review(
+                4, prev_interval=1, prev_ease=2.5, prev_repetition=0,
+                state=state, stability=0.0, difficulty=0.0,
+                due_date="", last_review="", subject="math", step=None,
+            )
+            self.assertEqual(res.engine, "fsrs",
+                             f"{label}({state}) step=None 静默降级 SM-2: reason={res.engine_reason!r}")
+            res2 = schedule_review(
+                4, prev_interval=1, prev_ease=2.5, prev_repetition=0,
+                state=state, stability=0.0, difficulty=0.0,
+                due_date="", last_review="", subject="math", step=0,
+            )
+            self.assertEqual(res2.engine, "fsrs")
+        # Review(2) 态 step=None 是正常的，不应兜底也不应崩
+        res_rev = schedule_review(
+            4, prev_interval=5, prev_ease=2.5, prev_repetition=3,
+            state=2, stability=2.0, difficulty=5.0,
             due_date="", last_review="", subject="math", step=None,
         )
-        self.assertEqual(res.engine, "fsrs",
-                         f"Learning 态 step=None 静默降级为 SM-2: reason={res.engine_reason!r}")
-        # 显式传 step=0 也必须 fsrs（两条路径都不能崩）
-        res2 = schedule_review(
-            4, prev_interval=1, prev_ease=2.5, prev_repetition=0,
-            state=1, stability=0.0, difficulty=0.0,
-            due_date="", last_review="", subject="math", step=0,
-        )
-        self.assertEqual(res2.engine, "fsrs")
+        self.assertEqual(res_rev.engine, "fsrs")
 
     # ── D1：评分日志前后快照 ──
     _SNAP_FIELDS = ("due_date", "interval_days", "ease_factor", "repetition",
